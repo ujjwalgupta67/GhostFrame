@@ -1,0 +1,15 @@
+# GhostFrame evidence lifecycle
+
+`ghostframe-lifecycle/1.0` is a memory-first orchestration contract. It calls the existing `inspect_file()` and `sanitize_with_verification()` APIs; it does not reproduce inspection, sanitization, comparison, or scoring logic.
+
+The state sequence is `CREATED -> INSPECTED -> SANITIZING -> SANITIZED -> REINSPECTED -> VERIFIED -> PACKAGED`. Any failed stage enters `FAILED`. Calls made from the wrong state fail with a structured `INVALID_TRANSITION` error. A failed operation cannot return a successful `EvidenceLifecycleResult`.
+
+The inspection commitment is created from the initial evidence snapshot before sanitization starts. The EvidenceRecord verification commitment covers the completed source, inspection, sanitization, sanitized artifact, re-inspection, and verification record. A separate `GhostFrame/lifecycle/v1` commitment binds the inspection commitment, EvidenceRecord verification commitment, operation commitment, and expected final audit head without changing the accepted Phase 1 or Phase 2 formats.
+
+The committed evidence-audit sequence remains `INSPECTION_COMPLETED`, `EVIDENCE_CREATED`, `SANITIZATION_STARTED`, `SANITIZATION_COMPLETED`, `REINSPECTION_COMPLETED`, and `VERIFICATION_COMPLETED`. Events contain commitments, hashes, and minimal state facts rather than raw metadata. Privacy-safe blockchain attempt/outcome events form a separate outer lifecycle log, because inserting a receipt into the chain whose head that receipt's transaction anchors would be circular.
+
+The default `DisabledAnchor` path performs no network activity and creates `.gfp` v1 exactly as before. With an explicitly injected adapter, the service submits the inspection request after evidence creation and before `SANITIZATION_STARTED`; blockchain failure does not block sanitization. After successful local verification and lifecycle commitment creation, it submits the verification request, collects both structured results, and only then creates `.gfp` v2. If inspection fails, verification is `NOT_REQUESTED`. If inspection is `PENDING`, sanitization continues and verification may be attempted because the adapter/contract decides whether the inspection transition actually exists.
+
+After package creation, the verifier checks the package, authenticated evidence, commitments, audit chain with its expected final head, original bytes, and exact returned sanitized bytes. These six local results remain independent of blockchain results. A v1 package reports blockchain `NOT_APPLICABLE`; offline v2 verification reports recorded receipt states separately and current checks as `NOT_CHECKED`; online v2 verification reconstructs requests from authenticated evidence and uses only the independently supplied adapter as its trust context. Re-checking never rewrites the package.
+
+No lifecycle artifact is automatically written to disk. The passphrase is accepted only by the packaging call and is not stored in the service or result. Python cannot guarantee immediate erasure of immutable strings or intermediate cryptographic buffers from process memory.

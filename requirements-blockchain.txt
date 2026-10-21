@@ -1,0 +1,6 @@
+# Optional Phase 5 local-EVM development and test dependencies.
+# Normal GhostFrame operation uses requirements.txt only.
+web3==7.16.0
+eth-tester==0.13.0b1
+py-evm==0.12.1b1
+py-solc-x==2.0.5
