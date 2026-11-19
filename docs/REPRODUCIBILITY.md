@@ -56,6 +56,31 @@ python scripts/compile_anchor_contract.py
 
 Recompilation requires the pinned compiler configured by the script and must reproduce the documented contract identity before replacing any accepted artifact.
 
+## Four-node Besu workflow
+
+Install Docker Desktop/Engine with Compose, then install the optional Python dependencies. On macOS/Linux (or Windows through WSL/Git Bash with Docker Desktop integration):
+
+```text
+python -m pip install -r requirements-blockchain.txt
+cd ghostframe-chain
+./chain.sh start
+export GF_BESU_DEV_KEY=0x8f2a55949038a9610f50fb23b5883af3b4ecb3c3bb792cbcefbd1542c692be63
+./chain.sh deploy-app
+cd ..
+streamlit run app.py
+```
+
+The key is a public Besu tutorial key for isolated development only. Deployment creates `ghostframe-chain/build/ghostframe_deployment.json`; rerunning `deploy-app` validates and reuses the same contract. The command rejects a manifest whose genesis or deployed contract identity no longer matches.
+
+Create evidence in the website using the four-node preset. To recheck a downloaded GFP package after restarting the website, use **Verify Evidence Package** or the terminal command:
+
+```text
+cd ghostframe-chain
+./chain.sh verify-app /path/to/package.gfp
+```
+
+For a reversible availability demonstration, run `./chain.sh down 4`, check the website/status, then `./chain.sh up 4`. With one node offline, three validators can remain live but the default evidence policy does not claim four-of-four verification. With two validators offline, QBFT normally stops advancing until quorum is restored. Never use `reset` for an outage demonstration: reset deletes the chain identity and history.
+
 ## Deterministic release
 
 ```text

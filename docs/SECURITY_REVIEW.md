@@ -12,6 +12,8 @@ The release-candidate source was reviewed for upload parsing, XML/ZIP/PDF/image 
 | Streamlit `unsafe_allow_html` | FALSE POSITIVE | Static layout or values passed through `html.escape`; raw file-derived values are rendered with normal Streamlit text components |
 | Broad exception handling | ACCEPTED RISK | Trust-boundary failures are intentionally converted to non-sensitive status messages and local sanitization is isolated from anchoring failure |
 | Loopback HTTP RPC | ACCEPTED RISK | Explicit local-development model; URL validation permits only loopback and identity checks bind chain, contract, code and interface |
+| Public Besu tutorial key in setup documentation | ACCEPTED DEVELOPMENT-ONLY RISK | The funded local-chain account is intentionally public, read only from `GF_BESU_DEV_KEY`, hidden from object representations and UI, and prohibited for real value or public networks |
+| Four validators under one operator | ACCEPTED DEMONSTRATION LIMIT | QBFT replication and outage behavior are real, but the arrangement does not provide independent organizational governance |
 
 `pip check` reported no broken requirements. The final `pip-audit` run must be read together with the exact release pins; no blind or untested upgrade is accepted.
 
@@ -49,3 +51,11 @@ GFP 1.0 and 2.0 require exactly `manifest.json`, `evidence.gfe` and `receipts.js
 | Metadata | bytecode hash disabled; CBOR append disabled |
 
 The contract source and accepted artifact were not changed during Phase 8.
+
+## Four-node Besu integration review
+
+Besu RPC targets are fixed loopback endpoints. The deployment manifest is strict and reset-sensitive: chain ID, genesis hash, contract address, runtime-code SHA-256 and interface version are validated before signing. The server-side signer checks chain ID, obtains the pending nonce, estimates gas, signs once and sends one raw transaction; it does not retry an unknown submission. Its private-key field is excluded from object representations, UI state, packages and logs.
+
+Per-node verification does not infer success from connectivity or peer count. Each node must independently expose the expected code, receipt, canonical receipt block, event and stored commitments. The default aggregate requires four confirmed nodes. One unavailable node yields a visible 3/4 failure; two unavailable validators paused live block production during controlled testing. Container controls and reset remain absent from the website.
+
+The remaining recovery limitation is that an evidence-generation transaction which times out before packaging is not journaled to disk for automatic continuation after a process restart. Its in-memory pending receipt preserves the transaction identifier, and the client never blindly resubmits, but full crash-recovery orchestration remains future work.

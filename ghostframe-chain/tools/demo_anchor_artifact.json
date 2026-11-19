@@ -1,0 +1,70 @@
+{
+ "contract": "DemoAnchor",
+ "compiler": "0.8.30+commit.73712a01",
+ "evmVersion": "prague",
+ "abi": [
+  {
+   "anonymous": false,
+   "inputs": [
+    {
+     "indexed": true,
+     "internalType": "bytes32",
+     "name": "fileHash",
+     "type": "bytes32"
+    },
+    {
+     "indexed": false,
+     "internalType": "uint256",
+     "name": "blockNumber",
+     "type": "uint256"
+    },
+    {
+     "indexed": true,
+     "internalType": "address",
+     "name": "submitter",
+     "type": "address"
+    }
+   ],
+   "name": "Anchored",
+   "type": "event"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "bytes32",
+     "name": "fileHash",
+     "type": "bytes32"
+    }
+   ],
+   "name": "anchor",
+   "outputs": [],
+   "stateMutability": "nonpayable",
+   "type": "function"
+  },
+  {
+   "inputs": [
+    {
+     "internalType": "bytes32",
+     "name": "",
+     "type": "bytes32"
+    }
+   ],
+   "name": "records",
+   "outputs": [
+    {
+     "internalType": "uint256",
+     "name": "blockNumber",
+     "type": "uint256"
+    },
+    {
+     "internalType": "address",
+     "name": "submitter",
+     "type": "address"
+    }
+   ],
+   "stateMutability": "view",
+   "type": "function"
+  }
+ ],
+ "bytecode": "0x6080604052348015600e575f5ffd5b506101f38061001c5f395ff3fe608060405234801561000f575f5ffd5b5060043610610034575f3560e01c806301e6472514610038578063eecdf92714610088575b5f5ffd5b6100676100463660046101a6565b5f60208190529081526040902080546001909101546001600160a01b031682565b604080519283526001600160a01b0390911660208301520160405180910390f35b61009b6100963660046101a6565b61009d565b005b806100db5760405162461bcd60e51b81526020600482015260096024820152680f4cae4de40d0c2e6d60bb1b60448201526064015b60405180910390fd5b5f81815260208190526040902054156101295760405162461bcd60e51b815260206004820152601060248201526f185b1c9958591e48185b98da1bdc995960821b60448201526064016100d2565b604080518082018252438082523360208084018281525f8781528083528690209451855551600190940180546001600160a01b0319166001600160a01b0390951694909417909355925190815283917f84dbb9ce184d1878830cd808f179fc6831bdd837296520e4726615daf660c9cf910160405180910390a350565b5f602082840312156101b6575f5ffd5b503591905056fea264697066735822122072e7d888fc7abf26a5e208a8b84bac6a688a99d18ba47de8e3f2001eb364675c64736f6c634300081e0033"
+}

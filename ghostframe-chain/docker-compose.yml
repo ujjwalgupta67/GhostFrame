@@ -1,0 +1,96 @@
+# GhostFrame demo: 4 Hyperledger Besu validators running QBFT consensus.
+# Don't run this file directly. Use ./chain.sh (it creates the keys and .env first).
+#
+#   Node 1  Processing org   http://127.0.0.1:8545
+#   Node 2  Client org       http://127.0.0.1:8546
+#   Node 3  Auditor          http://127.0.0.1:8547
+#   Node 4  Extra validator  http://127.0.0.1:8548
+
+x-besu: &besu
+  image: ${BESU_IMAGE:-hyperledger/besu:25.12.0}
+  restart: "no"
+
+services:
+  node1:
+    <<: *besu
+    container_name: gf-node1
+    command:
+      - --config-file=/config/node-config.toml
+      - --node-private-key-file=/node/key
+      - --data-path=/node/data
+      - --p2p-host=172.16.239.11
+      - --bootnodes=${BOOTNODES}
+    volumes:
+      - ./nodes/node1:/node
+      - ./build/genesis.json:/config/genesis.json:ro
+      - ./config/node-config.toml:/config/node-config.toml:ro
+    ports:
+      - "127.0.0.1:8545:8545"
+    networks:
+      gfnet:
+        ipv4_address: 172.16.239.11
+
+  node2:
+    <<: *besu
+    container_name: gf-node2
+    command:
+      - --config-file=/config/node-config.toml
+      - --node-private-key-file=/node/key
+      - --data-path=/node/data
+      - --p2p-host=172.16.239.12
+      - --bootnodes=${BOOTNODES}
+    volumes:
+      - ./nodes/node2:/node
+      - ./build/genesis.json:/config/genesis.json:ro
+      - ./config/node-config.toml:/config/node-config.toml:ro
+    ports:
+      - "127.0.0.1:8546:8545"
+    networks:
+      gfnet:
+        ipv4_address: 172.16.239.12
+
+  node3:
+    <<: *besu
+    container_name: gf-node3
+    command:
+      - --config-file=/config/node-config.toml
+      - --node-private-key-file=/node/key
+      - --data-path=/node/data
+      - --p2p-host=172.16.239.13
+      - --bootnodes=${BOOTNODES}
+    volumes:
+      - ./nodes/node3:/node
+      - ./build/genesis.json:/config/genesis.json:ro
+      - ./config/node-config.toml:/config/node-config.toml:ro
+    ports:
+      - "127.0.0.1:8547:8545"
+    networks:
+      gfnet:
+        ipv4_address: 172.16.239.13
+
+  node4:
+    <<: *besu
+    container_name: gf-node4
+    command:
+      - --config-file=/config/node-config.toml
+      - --node-private-key-file=/node/key
+      - --data-path=/node/data
+      - --p2p-host=172.16.239.14
+      - --bootnodes=${BOOTNODES}
+    volumes:
+      - ./nodes/node4:/node
+      - ./build/genesis.json:/config/genesis.json:ro
+      - ./config/node-config.toml:/config/node-config.toml:ro
+    ports:
+      - "127.0.0.1:8548:8545"
+    networks:
+      gfnet:
+        ipv4_address: 172.16.239.14
+
+networks:
+  gfnet:
+    name: ghostframe-net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.239.0/24

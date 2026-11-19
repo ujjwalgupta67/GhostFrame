@@ -16,6 +16,14 @@ from ghostframe.reporting import SAFETY_STATEMENT, html_report, json_report
 from ghostframe.security import safe_display_name
 from ghostframe.evidence import EvidenceCollisionError, EvidencePersistenceError, VerificationState
 from ghostframe.blockchain.models import AnchorState
+from ghostframe.blockchain.besu import create_besu_adapter, create_besu_verifier
+from ghostframe.blockchain.multinode import verify_package_across_nodes
+from ghostframe.blockchain.network import BESU_FOUR_NODE_ENDPOINTS
+from ghostframe.blockchain.network_ui import (
+    load_default_besu_manifest,
+    render_multinode_result,
+    render_network_dashboard,
+)
 from ghostframe.blockchain.ui import (
     LocalBlockchainUIError,
     LocalEVMSettings,
@@ -174,6 +182,38 @@ def local_evm_settings(prefix: str) -> LocalEVMSettings:
     return LocalEVMSettings(rpc_url, chain_id, contract, code_hash, version, confirmations)
 
 
+def blockchain_network_controls(prefix: str):
+    profile = st.selectbox(
+        "Blockchain development network",
+        ["Existing local EVM", "Four-node Hyperledger Besu"],
+        key=f"{prefix}_profile",
+    )
+    if profile == "Four-node Hyperledger Besu":
+        st.warning("FOUR-NODE LOCAL DEVELOPMENT MODE — all validators currently run under one local operator.")
+        try:
+            manifest = load_default_besu_manifest()
+        except ValueError as exc:
+            st.error(str(exc) + " Run `ghostframe-chain/chain.sh deploy-app` from Terminal.")
+            return profile, None, None, "besu-unavailable"
+        st.write(f"Contract: `{manifest.contract_address}`")
+        st.write(f"Runtime code SHA-256: `{manifest.runtime_code_hash}`")
+        render_network_dashboard(manifest, key=f"{prefix}_network_check")
+        return profile, None, manifest, manifest.network_profile
+    settings = local_evm_settings(prefix)
+    return profile, settings, None, settings.fingerprint()
+
+
+def configured_blockchain_adapter(profile, settings, manifest, *, signing: bool):
+    if profile == "Four-node Hyperledger Besu":
+        if manifest is None:
+            raise LocalBlockchainUIError("A valid four-node deployment manifest is required.")
+        try:
+            return create_besu_adapter(manifest) if signing else create_besu_verifier(manifest)
+        except (RuntimeError, ValueError) as exc:
+            raise LocalBlockchainUIError(str(exc)) from exc
+    return create_local_evm_adapter(settings)
+
+
 def render_anchor_receipt(title: str, receipt) -> None:
     st.markdown(f"**{title}: {receipt.state.value}**")
     if receipt.state == AnchorState.PENDING:
@@ -221,6 +261,7 @@ def render_package_verification_workflow() -> None:
             )
             st.session_state["gf_verify_result"] = verification
             st.session_state["gf_verify_request_key"] = hashlib.sha256(package_bytes).hexdigest()
+            st.session_state.pop("gf_verify_multinode", None)
         except EvidenceUIError as exc:
             st.error(str(exc))
     if package_upload is not None:
@@ -233,7 +274,7 @@ def render_package_verification_workflow() -> None:
                 st.subheader("Current local blockchain verification")
                 st.write("The uploaded package does not choose the trusted chain. Your independent local configuration verifies its receipt claims.")
                 with st.expander("Configure trusted local EVM", expanded=True):
-                    settings = local_evm_settings("gf_verify_chain")
+                    profile, settings, manifest, _ = blockchain_network_controls("gf_verify_chain")
                 with st.form("gf_verify_chain_form", clear_on_submit=True):
                     st.text_input("Evidence passphrase for re-check", type="password", key="gf_verify_chain_passphrase")
                     recheck = st.form_submit_button(
@@ -244,7 +285,7 @@ def render_package_verification_workflow() -> None:
                 if recheck:
                     recheck_passphrase = st.session_state.pop("gf_verify_chain_submitted_passphrase", "")
                     try:
-                        adapter = create_local_evm_adapter(settings)
+                        adapter = configured_blockchain_adapter(profile, settings, manifest, signing=False)
                         current = verify_package_for_ui(
                             package=package_upload.getvalue(), passphrase=recheck_passphrase,
                             source_file=optional_source.getvalue() if optional_source is not None else None,
@@ -252,9 +293,25 @@ def render_package_verification_workflow() -> None:
                             blockchain_anchor=adapter,
                         )
                         st.session_state["gf_verify_result"] = current
+                        if profile == "Four-node Hyperledger Besu" and manifest is not None:
+                            st.session_state["gf_verify_multinode"] = verify_package_across_nodes(
+                                package_upload.getvalue(), recheck_passphrase, BESU_FOUR_NODE_ENDPOINTS,
+                                expected_chain_id=manifest.chain_id,
+                                contract_address=manifest.contract_address,
+                                expected_code_hash=manifest.runtime_code_hash,
+                                expected_contract_version=manifest.contract_version,
+                                expected_genesis_hash=manifest.genesis_hash,
+                            )
+                        else:
+                            st.session_state.pop("gf_verify_multinode", None)
                         st.rerun()
-                    except (EvidenceUIError, LocalBlockchainUIError) as exc:
+                    except (EvidenceUIError, LocalBlockchainUIError, ValueError) as exc:
                         st.error(str(exc))
+                if "gf_verify_multinode" in st.session_state:
+                    st.subheader("Four-node anchor verification")
+                    inspection_multi, verification_multi = st.session_state["gf_verify_multinode"]
+                    render_multinode_result("Inspection anchor", inspection_multi)
+                    render_multinode_result("Verification anchor", verification_multi)
     st.warning("GhostFrame cannot recover a lost evidence passphrase. Offline verification never treats a recorded blockchain receipt as current chain proof.")
 
 
@@ -437,20 +494,27 @@ with protect_tab:
     else:
         blockchain_mode = workflow_mode == "Local Blockchain-Anchored Evidence Mode"
         settings = None
+        blockchain_profile = "Existing local EVM"
+        besu_manifest = None
         blockchain_fingerprint = "disabled"
         if blockchain_mode:
             st.info("Local blockchain anchoring creates a GFP 2.0 package. It remains a development/research feature and is not approved for public networks or hostile mempools.")
             with st.expander("Configure LOCAL EVM / DEVELOPMENT MODE", expanded=True):
-                settings = local_evm_settings("gf_generate_chain")
-                blockchain_fingerprint = settings.fingerprint()
+                blockchain_profile, settings, besu_manifest, blockchain_fingerprint = blockchain_network_controls("gf_generate_chain")
                 if st.button("Test local blockchain connection", width="stretch"):
                     try:
-                        health_adapter = create_local_evm_adapter(settings)
+                        health_adapter = configured_blockchain_adapter(
+                            blockchain_profile, settings, besu_manifest, signing=False,
+                        )
                         health = health_adapter.health()
                         if health.state == AnchorState.CONFIRMED:
                             st.success("RPC connected; expected chain, contract code, and interface version verified.")
                             st.write(f"Chain ID: `{health.chain_id}`  Contract: `{health.contract_address}`")
-                            account = local_development_account(health_adapter)
+                            account = (
+                                besu_manifest.signer_address
+                                if blockchain_profile == "Four-node Hyperledger Besu" and besu_manifest is not None
+                                else local_development_account(health_adapter)
+                            )
                             if account:
                                 st.write(f"LOCAL DEVELOPMENT ACCOUNT: `{account}`")
                             else:
@@ -510,7 +574,11 @@ with protect_tab:
                             st.write("Anchoring the verification commitment after local verification")
                         st.write("Encrypting evidence and creating one package")
                         st.write("Independently verifying the package and exact file bytes")
-                        adapter = create_local_evm_adapter(settings) if blockchain_mode and settings is not None else None
+                        adapter = (
+                            configured_blockchain_adapter(
+                                blockchain_profile, settings, besu_manifest, signing=True,
+                            ) if blockchain_mode else None
+                        )
                         evidence_result = generate_evidence_once(
                             st.session_state,
                             source_data=data,
@@ -521,6 +589,16 @@ with protect_tab:
                             blockchain_anchor=adapter,
                             blockchain_fingerprint=blockchain_fingerprint,
                         )
+                        if blockchain_profile == "Four-node Hyperledger Besu" and besu_manifest is not None:
+                            st.write("Checking both anchors through all four Besu nodes")
+                            st.session_state["gf_generate_multinode"] = verify_package_across_nodes(
+                                evidence_result.evidence_package, passphrase, BESU_FOUR_NODE_ENDPOINTS,
+                                expected_chain_id=besu_manifest.chain_id,
+                                contract_address=besu_manifest.contract_address,
+                                expected_code_hash=besu_manifest.runtime_code_hash,
+                                expected_contract_version=besu_manifest.contract_version,
+                                expected_genesis_hash=besu_manifest.genesis_hash,
+                            )
                         status.update(label="Verifiable evidence created", state="complete", expanded=False)
                     if persist_locally:
                         try:
@@ -534,9 +612,9 @@ with protect_tab:
                             st.error("Downloads are ready, but local saving was stopped because evidence for this operation already exists.")
                         except EvidencePersistenceError:
                             st.error("Downloads are ready, but GhostFrame could not save the encrypted evidence locally.")
-                except (EvidenceUIError, LocalBlockchainUIError) as exc:
+                except (EvidenceUIError, LocalBlockchainUIError, ValueError) as exc:
                     st.error(str(exc))
-                    if exc.sanitization_succeeded:
+                    if getattr(exc, "sanitization_succeeded", False):
                         st.info("Sanitization reached completion, but no successful evidence package was retained for download.")
         else:
             evidence_result = st.session_state[EVIDENCE_RESULT_KEY]
@@ -565,6 +643,11 @@ with protect_tab:
                 st.caption("Evidence package: GFP 2.0")
                 render_anchor_receipt("Inspection anchor", evidence_result.inspection_anchor)
                 render_anchor_receipt("Verification anchor", evidence_result.verification_anchor)
+                if "gf_generate_multinode" in st.session_state:
+                    st.subheader("Four-node anchor verification")
+                    inspection_multi, verification_multi = st.session_state["gf_generate_multinode"]
+                    render_multinode_result("Inspection anchor", inspection_multi)
+                    render_multinode_result("Verification anchor", verification_multi)
                 st.info("A confirmed anchor shows that a cryptographic commitment was registered in the verified local contract state. It does not prove authorship, ownership, legal provenance, or that metadata was truthful.")
             else:
                 s4.info("BLOCKCHAIN\n\nNOT APPLICABLE")

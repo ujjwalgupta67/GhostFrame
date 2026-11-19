@@ -1,4 +1,4 @@
-# GhostFrame 2.1
+# GhostFrame 2.2.0
 
 GhostFrame is a local, browser-based metadata privacy analysis and sanitization system for JPG, JPEG, PNG, PDF, and DOCX files. It extracts evidence, explains it in plain language, derives only deterministic correlations, creates a separate sanitized copy, and re-inspects that copy using stable finding identities and source locations.
 
@@ -37,7 +37,7 @@ Browser download is the default. Local persistence is off by default and must be
 
 Writes use a completed temporary file followed by a collision-safe atomic link in the destination directory. Existing operation artifacts are never overwritten. POSIX systems receive restrictive directory/file modes where supported; Windows and other filesystems may enforce permissions differently. `.ghostframe/` is excluded from Git and source releases.
 
-Blockchain anchoring remains disabled by default, so normal local runs create frozen-format v1 packages and both blockchain dimensions report **NOT APPLICABLE**. **Local Blockchain-Anchored Evidence Mode** may explicitly use the optional local-EVM adapter to create strict v2 packages with two-stage inspection and verification receipts. GhostFrame never invents transaction hashes, chain IDs, or wallet state.
+Blockchain anchoring remains disabled by default, so normal local runs create frozen-format v1 packages and both blockchain dimensions report **NOT APPLICABLE**. **Local Blockchain-Anchored Evidence Mode** may explicitly use the existing Anvil-compatible adapter or the four-node Hyperledger Besu preset to create strict v2 packages with two-stage inspection and verification receipts. GhostFrame never invents transaction hashes, chain IDs, consensus, or wallet state.
 
 ## Inspection modes
 
@@ -254,6 +254,41 @@ The **Verify Evidence Package** workflow always performs local verification firs
 Streamlit reruns, tab changes, and download clicks reuse the exact completed result in session memory. A transaction-producing lifecycle starts only after deliberate form submission. Starting over or discarding the result clears its public blockchain presentation state. Passphrases are staged for one run and removed; decrypted evidence and blockchain secrets are not stored in session state.
 
 For contract architecture, local Anvil setup, optional dependencies, privacy boundaries, confirmation rules, RPC trust assumptions, and limitations, see [ghostframe/blockchain/README.md](ghostframe/blockchain/README.md).
+
+### Four-node Hyperledger Besu mode
+
+This optional mode requires Docker Desktop (or Docker Engine with Compose) and `requirements-blockchain.txt`. Ordinary GhostFrame use does not require Docker or a blockchain.
+
+From the project folder on macOS or Linux:
+
+```sh
+python -m pip install -r requirements-blockchain.txt
+cd ghostframe-chain
+./chain.sh start
+export GF_BESU_DEV_KEY='0x8f2a55949038a9610f50fb23b5883af3b4ecb3c3bb792cbcefbd1542c692be63'
+./chain.sh deploy-app
+cd ..
+streamlit run app.py
+```
+
+The displayed key is the publicly documented Besu tutorial account and is safe only for this isolated local demonstration. Never fund it, reuse it, or connect this signing configuration to a public or shared network. On Windows, run the same `ghostframe-chain` commands inside WSL or Git Bash with Docker Desktop integration; the base GhostFrame website and its launchers remain natively cross-platform.
+
+In the website, choose **Local Blockchain-Anchored Evidence Mode**, then **Four-node Hyperledger Besu**. Use **Check four-node network** before generating evidence. The deployment manifest supplies chain ID `4242`, genesis identity, contract address, runtime-code hash, interface version, and public signer address automatically. The private key remains only in the Streamlit server process environment; it is never accepted by a browser field or written to the GFP package.
+
+For an existing GFP 2.0 package, choose **Verify Evidence Package**, perform offline verification first, select the four-node preset, and use **Re-check blockchain status**. This validates each receipt, canonical block, event, contract identity, and stored commitments separately through ports 8545–8548. The default policy requires all four nodes; “3 of 4 available” is reported as incomplete rather than four-node success.
+
+Terminal-only operations remain separate from the website:
+
+```sh
+cd ghostframe-chain
+./chain.sh status
+./chain.sh verify-app /path/to/evidence.gfp
+./chain.sh down 4       # reversible one-node outage demonstration
+./chain.sh up 4
+./chain.sh stop         # keeps chain data
+```
+
+`./chain.sh reset` destroys the ledger, validator keys, generated deployment manifest, and historical current-chain verifiability. It requires typed confirmation and is never available in the website. Existing GFP packages can still pass their local cryptographic checks after a reset, but their old transactions cannot be verified on the replacement chain.
 
 ## Build a clean portable ZIP
 

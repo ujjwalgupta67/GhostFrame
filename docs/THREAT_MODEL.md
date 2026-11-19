@@ -2,7 +2,7 @@
 
 ## Scope and objectives
 
-GhostFrame protects supported metadata and evidence integrity while processing files locally. It does not prove identity, authorship, ownership, lawful provenance, visible-content safety, malware absence, or metadata truth. The supported blockchain model is a loopback local EVM with unlocked development accounts.
+GhostFrame protects supported metadata and evidence integrity while processing files locally. It does not prove identity, authorship, ownership, lawful provenance, visible-content safety, malware absence, or metadata truth. Supported blockchain models are an unlocked loopback development EVM and a locally signed four-node loopback Besu network.
 
 | Threat | Control | Residual risk | User/operator responsibility |
 |---|---|---|---|
@@ -21,7 +21,11 @@ GhostFrame protects supported metadata and evidence integrity while processing f
 | Malicious/unavailable RPC | Loopback-only URL policy, timeouts, failure isolation, no raw metadata sent | RPC can withhold, delay or misreport state | Treat failures as not verified; do not expose RPC publicly |
 | Transaction spoofing, reversion or insufficient confirmation | Receipt status, transaction, event, state and confirmation checks | Local development consensus is not production consensus | Inspect stage status and transaction details |
 | First-submitter/front-running | Verification requires the inspection submitter for stage two | The first valid submitter controls that operation commitment; hostile mempools are unsupported | Use only the local development model |
-| Development accounts and secrets | UI never accepts private keys or mnemonics; uses unlocked local accounts | Anvil credentials are public test credentials | Never reuse them on public networks |
+| Development accounts and secrets | UI never accepts private keys or mnemonics; Anvil uses unlocked accounts and Besu reads `GF_BESU_DEV_KEY` only in the server process | Both use public/disposable test credentials; Python process memory can contain the Besu key | Never reuse them, fund them, log them, or connect them to public networks |
+| Besu chain reset or stale manifest | Manifest binds chain ID, genesis hash, contract code/version and deployment transaction; every session validates reset-sensitive identity | Reset permanently removes the local historical ledger unless separately backed up | Treat reset as destructive; preserve old chain data when historical verification matters |
+| Partial node outage | Per-node bounded checks and strict four-of-four verification policy; unavailable nodes are explicit | Three validators can continue producing blocks, but verification coverage is incomplete | Restore the node and recheck before claiming four-node verification |
+| Two-validator outage | Monitoring shows only two reachable nodes and QBFT block production pauses | Pending submissions remain unresolved until quorum returns | Restore validators; never resubmit blindly while transaction status is unknown |
+| Validator concentration | Four processes replicate state with QBFT | One local operator controls all hosts, keys and runtime | Describe this as a local consensus demonstration, not independent governance |
 | Streamlit rerun duplication | Session request fingerprint and exact-byte reuse | Browser/session reset intentionally creates a new operation | Confirm the displayed operation before retaining evidence |
 | Secret leakage | Passphrases are staged only for submission; errors omit underlying secrets; release allow-list excludes secret files | Process memory, OS swap and local debugging remain outside guarantees | Secure the workstation and do not enable unsafe debugging |
 | Temporary files and symlinks | Standard temporary APIs, randomized paths, cleanup, non-following exclusive persistence writes | OS-level privileged attackers remain out of scope | Use a trusted local account and filesystem |

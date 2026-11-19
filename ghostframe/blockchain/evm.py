@@ -20,6 +20,7 @@ from .models import (
     InspectionAnchorRequest,
     VerificationAnchorRequest,
 )
+from .signing import TransactionSigner
 
 
 ZERO_BYTES32 = "0x" + "0" * 64
@@ -51,7 +52,10 @@ def _stage(request: AnchorRequest) -> AnchorStage:
 class EvmAnchor(BlockchainAnchor):
     """Commitment adapter for a configured local EVM and known contract code."""
 
-    def __init__(self, config: BlockchainConfig, *, web3: Any | None = None, submitter: str | None = None):
+    def __init__(
+        self, config: BlockchainConfig, *, web3: Any | None = None,
+        submitter: str | None = None, signer: TransactionSigner | None = None,
+    ):
         if not config.enabled:
             raise ValueError("EVM adapter requires enabled blockchain configuration.")
         if web3 is None:
@@ -62,17 +66,22 @@ class EvmAnchor(BlockchainAnchor):
             web3 = Web3(HTTPProvider(config.rpc_url, request_kwargs={"timeout": config.receipt_timeout_seconds}))
         self.web3 = web3
         self.config = config
-        self.submitter = submitter
+        self.signer = signer
+        self.submitter = signer.address if signer is not None else submitter
         artifact = _artifact()
         self.contract = self.web3.eth.contract(address=self.web3.to_checksum_address(config.contract_address), abi=artifact["abi"])
         self.deployment_receipt: Any | None = None
 
     @classmethod
-    def deploy(cls, web3: Any, *, submitter: str | None = None, confirmations_required: int = 1) -> EvmAnchor:
+    def deploy(
+        cls, web3: Any, *, submitter: str | None = None,
+        signer: TransactionSigner | None = None, confirmations_required: int = 1,
+    ) -> EvmAnchor:
         artifact = _artifact()
-        sender = submitter or web3.eth.accounts[0]
+        sender = signer.address if signer is not None else (submitter or web3.eth.accounts[0])
         factory = web3.eth.contract(abi=artifact["abi"], bytecode=artifact["bytecode"])
-        tx_hash = factory.constructor().transact({"from": sender})
+        constructor = factory.constructor()
+        tx_hash = signer.submit(web3, constructor) if signer is not None else constructor.transact({"from": sender})
         receipt = web3.eth.wait_for_transaction_receipt(tx_hash, timeout=30)
         if int(receipt["status"]) != 1:
             raise RuntimeError("Local GhostFrame anchor contract deployment reverted.")
@@ -87,7 +96,7 @@ class EvmAnchor(BlockchainAnchor):
             expected_contract_version=artifact["contract_version"],
             confirmations_required=confirmations_required,
         )
-        adapter = cls(config, web3=web3, submitter=sender)
+        adapter = cls(config, web3=web3, submitter=sender, signer=signer)
         adapter.deployment_receipt = receipt
         return adapter
 
@@ -166,7 +175,7 @@ class EvmAnchor(BlockchainAnchor):
             except Exception:
                 return self._base_failure(request, FailureCategory.TRANSACTION_REJECTED, "No local development account is available.")
         try:
-            tx_hash = function.transact({"from": sender})
+            tx_hash = self.signer.submit(self.web3, function) if self.signer is not None else function.transact({"from": sender})
         except Exception as exc:
             reverted = exc.__class__.__name__ in {"ContractLogicError", "TransactionFailed"}
             category = FailureCategory.TRANSACTION_REVERTED if reverted else FailureCategory.TRANSACTION_REJECTED
@@ -306,8 +315,15 @@ class EvmAnchor(BlockchainAnchor):
                 return AnchorVerification(AnchorState.FAILED, "Receipt domain identity does not match the configured chain and contract.", stage, request.operation_commitment, receipt=receipt)
             try:
                 raw = self.web3.eth.get_transaction_receipt(receipt.transaction_hash)
+                canonical = self.web3.eth.get_block(receipt.block_number)
             except Exception:
                 return AnchorVerification(AnchorState.FAILED, "Receipt transaction is unavailable from the configured RPC.", stage, request.operation_commitment, receipt=receipt)
+            if _hex(canonical["hash"]) != receipt.block_hash:
+                return AnchorVerification(
+                    AnchorState.FAILED,
+                    "Recorded receipt block is not canonical on the configured RPC.",
+                    stage, request.operation_commitment, receipt=receipt,
+                )
             refreshed = self._evaluate_receipt(request, raw)
             immutable_matches = (
                 refreshed.transaction_hash == receipt.transaction_hash

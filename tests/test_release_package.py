@@ -66,6 +66,12 @@ def test_release_version_is_consistent_and_docs_are_packaged():
     root = Path(__file__).resolve().parent.parent
     relative = {path.relative_to(root).as_posix() for path in collect_release_files(root)}
     assert {"RELEASE_NOTES.md", "docs/ARCHITECTURE.md", "docs/THREAT_MODEL.md", "docs/SECURITY_REVIEW.md", "docs/REPRODUCIBILITY.md", "docs/ACCEPTANCE_MATRIX.md"} <= relative
+    assert {
+        "ghostframe-chain/chain.sh",
+        "ghostframe-chain/docker-compose.yml",
+        "ghostframe-chain/tools/deploy_ghostframe.py",
+        "ghostframe-chain/tools/verify_ghostframe.py",
+    } <= relative
 
 
 def test_documented_deployment_script_starts_directly():

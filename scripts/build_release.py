@@ -15,6 +15,13 @@ ROOT_FILES = {
     "LICENSE", "LICENSE.md", "LICENSE.txt",
 }
 SOURCE_DIRS = {"ghostframe", "tests", "scripts", ".streamlit", "docs"}
+CHAIN_FILES = {
+    "README.md", "chain.sh", "docker-compose.yml",
+    "config/node-config.toml", "config/qbftConfigFile.json",
+    "contracts/DemoAnchor.sol", "tools/check_nodes.py", "tools/demo_anchor.py",
+    "tools/demo_anchor_artifact.json", "tools/deploy_ghostframe.py",
+    "tools/verify_ghostframe.py", "tools/requirements.txt",
+}
 EXCLUDED_DIRS = {".venv", "venv", ".ghostframe", ".anvil", "anvil-state", "broadcast", "cache", "out", "__pycache__", ".pytest_cache", "__MACOSX", ".git", "dist", "reports", "uploads", "test-output", "test_output"}
 EXCLUDED_FILES = {".DS_Store", ".env", "secrets.toml"}
 EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".tmp", ".log", ".zip", ".gfe", ".gfp", ".key", ".pem"}
@@ -47,6 +54,10 @@ def collect_release_files(root: Path) -> list[Path]:
         for candidate in sorted(base.rglob("*")):
             if candidate.is_file() and not is_excluded(candidate, root):
                 files.append(candidate)
+    for name in sorted(CHAIN_FILES):
+        candidate = root / "ghostframe-chain" / name
+        if candidate.is_file() and not is_excluded(candidate, root):
+            files.append(candidate)
     return sorted(set(files), key=lambda path: path.relative_to(root).as_posix())
 
 

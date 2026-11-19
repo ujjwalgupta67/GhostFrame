@@ -1,0 +1,5 @@
+build/
+nodes/
+.env
+.venv/
+__pycache__/

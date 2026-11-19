@@ -16,8 +16,11 @@ flowchart TD
     C --> G[GFP 1.0 or GFP 2.0]
     Q --> G
     E --> B[Blockchain abstraction]
-    B --> V[Local EVM adapter]
+    B --> V[Existing unlocked local EVM adapter]
+    B --> Z[Besu local signing adapter]
     V --> H[GhostFrameAnchor]
+    Z --> H
+    H --> N[Four QBFT Besu nodes]
     G --> X[Independent offline verification]
     H --> Y[Optional current-chain re-check]
 ```
@@ -33,7 +36,8 @@ flowchart TD
 | Sanitizers | Format-specific safer-copy creation | `ghostframe/sanitizers/` |
 | Verification | Re-inspection and before/after comparison | `ghostframe/comparison.py` |
 | Evidence | Canonical records, encryption, audit, package and verification | `ghostframe/evidence/` |
-| Blockchain | Disabled, in-memory and local-EVM adapters | `ghostframe/blockchain/` |
+| Blockchain | Disabled, in-memory, unlocked local-EVM and signed Besu adapters | `ghostframe/blockchain/` |
+| Network verification | Four-node observation, common-height comparison and per-node receipt/state checks | `ghostframe/blockchain/network.py`, `multinode.py` |
 | Contract | Two-stage commitment registry | `ghostframe/blockchain/contracts/GhostFrameAnchor.sol` |
 
 ## Blockchain lifecycle
@@ -45,7 +49,13 @@ ORIGINAL FILE -> INSPECTION -> INSPECTION EVIDENCE -> INSPECTION COMMITMENT
   -> LOCAL BLOCKCHAIN ANCHOR #2 -> GFP 2.0 -> INDEPENDENT VERIFICATION
 ```
 
-Anchor #1 commits to the pre-sanitization inspection before transformation. Anchor #2 is attempted only after local re-inspection and verification. GFP 2.0 records receipts, but offline verification labels them as recorded state, not current chain proof. Current verification requires an independently configured loopback RPC, expected chain ID, contract address, runtime-code hash and interface version.
+Anchor #1 commits to the pre-sanitization inspection before transformation. Anchor #2 is attempted only after local re-inspection and verification. GFP 2.0 records receipts, but offline verification labels them as recorded state, not current chain proof. The Besu preset binds a generated deployment manifest to chain ID 4242, the genesis hash, contract address, runtime-code SHA-256, interface version and public signer. Current four-node verification independently checks the receipt's canonical block, expected event and contract state through every node.
+
+## Four-node deployment boundary
+
+The four Besu processes replicate one local QBFT ledger and expose loopback RPC ports 8545–8548. Network observation compares chain ID and genesis hash, then compares block hashes at the minimum reachable height so a temporarily lagging node is not mistaken for a fork. A node is counted as verified only when contract identity, receipt, canonical block, event and stored commitments all match. Availability and the configured verification threshold are reported separately.
+
+All four nodes are currently operated on one computer by one operator. This demonstrates replicated state, validator quorum behavior, outage handling and independent RPC views; it does not provide independent organizational governance. Container start, stop, logs and reset remain terminal-only.
 
 ## Privacy and data placement
 
@@ -55,4 +65,4 @@ Anchor #1 commits to the pre-sanitization inspection before transformation. Anch
 
 **Never intentionally stored on-chain:** plaintext GPS, authors, emails, comments, filenames, document contents, passphrases or encryption keys. File hashes can still enable known-file correlation.
 
-The local EVM is a development demonstration, not a public-chain deployment or production key-management design.
+The local EVM and four-node Besu network are development demonstrations, not public-chain deployments or production key-management designs. Blockchain registration proves only that specific commitments were present in the validated local ledger state; it does not prove authorship, ownership, metadata truth or lawful provenance.

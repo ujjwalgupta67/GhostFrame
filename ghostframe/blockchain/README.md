@@ -1,8 +1,8 @@
 # GhostFrame optional blockchain anchoring
 
 This package is an optional, isolated commitment registry. The backend evidence
-lifecycle can use it through explicit dependency injection; the Streamlit
-interface remains unconnected to a chain. Normal GhostFrame remains fully
+lifecycle can use it through explicit dependency injection, and the Streamlit
+interface exposes explicit existing-EVM and four-node Besu development presets. Normal GhostFrame remains fully
 offline, requires only `requirements.txt`, and creates immutable v1 packages.
 
 ## Architecture and privacy boundary
@@ -88,8 +88,25 @@ fragments are rejected without being contacted.
 The connection test delegates chain, contract-code, and interface checks to
 `EvmAnchor.health()`. An unlocked account address may be shown as a **LOCAL
 DEVELOPMENT ACCOUNT**; GhostFrame does not manage its key. There is no automatic
-RPC discovery, transaction submission, retry, public explorer link, or public
-network configuration.
+RPC discovery, transaction retry, public explorer link, or public-network
+configuration. Transaction submission occurs only after the user submits the
+evidence form.
+
+## Four-node Besu development profile
+
+The Besu profile keeps `BlockchainAnchor` and GFP 2.0 unchanged. A server-side
+`LocalDevelopmentSigner` reads `GF_BESU_DEV_KEY`, derives the expected public
+address, estimates gas, chooses the pending nonce, signs locally and sends the
+raw transaction once. The browser never receives or accepts the key. The
+deployment manifest binds chain 4242 to its genesis hash, deployed contract,
+runtime-code SHA-256, interface version, deployment transaction and signer.
+
+`network.py` queries the four fixed loopback endpoints concurrently and compares
+their block hash at a common height. `multinode.py` reconstructs authenticated
+requests from the GFP package and checks the receipt, canonical block, event and
+contract state through each RPC. All four are required by default. Three matching
+nodes plus one unavailable node is useful availability information, but is not
+reported as four-node verification.
 
 For existing GFP 2.0 packages, offline verification shows historical receipt
 states and reports current state as `NOT_CHECKED`. The explicit **Re-check
